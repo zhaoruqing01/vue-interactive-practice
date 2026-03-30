@@ -1,5 +1,5 @@
-import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -61,6 +61,14 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('../views/Scroll/index.vue'),
         meta: {
           title: '滚动'
+        }
+      },
+      {
+        path: 'video',
+        name: 'Video',
+        component: () => import('../views/Video/index.vue'),
+        meta: {
+          title: '视频交互'
         }
       },
     ]

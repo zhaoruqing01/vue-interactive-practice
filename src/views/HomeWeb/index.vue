@@ -158,12 +158,12 @@ const onPageWheel = (e) => {
     setTimeout(() => (isScrolling.value = false), 500)
   }
 
-  if (scrollTop >= page2Top - 100 && scrollTop < page3Top - 100 && wheelUp) {
-    e.preventDefault()
-    isScrolling.value = true
-    container.scrollTo({ top: 0, behavior: 'smooth' })
-    setTimeout(() => (isScrolling.value = false), 500)
-  }
+  // if (scrollTop >= page2Top - 100 && scrollTop < page3Top - 100 && wheelUp) {
+  //   e.preventDefault()
+  //   isScrolling.value = true
+  //   container.scrollTo({ top: 0, behavior: 'smooth' })
+  //   setTimeout(() => (isScrolling.value = false), 500)
+  // }
 }
 
 onMounted(() => {

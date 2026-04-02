@@ -18,12 +18,16 @@
         </template>
       </el-menu>
     </el-aside>
-    
+
     <el-container>
       <el-header class="header">
         <div class="header-right">
-          <span style="margin-right: 15px">Admin</span>
-          <el-button type="danger" size="small" @click="handleLogout">退出登录</el-button>
+          <span style="margin-right: 15px">{{
+            userStore.userInfo.username
+          }}</span>
+          <el-button type="danger" size="small" @click="handleLogout"
+            >退出登录</el-button
+          >
         </div>
       </el-header>
       <el-main class="main">
@@ -38,24 +42,28 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { Menu, Document } from '@element-plus/icons-vue'
+import { useUserStore } from "@/store/user";
+import { Menu } from "@element-plus/icons-vue";
+import { computed } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
-const route = useRoute()
-const router = useRouter()
-console.log(router,'router')
+// 实例化用户模块
+const userStore = useUserStore();
+
+const route = useRoute();
+const router = useRouter();
+console.log(router, "router");
 
 // 获取主布局下的子路由作为菜单
 const menuRoutes = computed(() => {
-  const rootRoute = router.options.routes.find(r => r.path === '/')
-  return rootRoute?.children || []
-})
-
+  const rootRoute = router.options.routes.find((r) => r.path === "/");
+  return rootRoute?.children || [];
+});
 
 const handleLogout = () => {
-  router.push('/login')
-}
+  userStore.clearUserInfo();
+  router.push("/login");
+};
 </script>
 
 <style scoped>
@@ -89,7 +97,7 @@ const handleLogout = () => {
   align-items: center;
   justify-content: flex-end;
   border-bottom: 1px solid #eee;
-  box-shadow: 0 1px 4px rgba(0,21,41,.08);
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
 }
 
 .header-right {

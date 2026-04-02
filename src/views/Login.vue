@@ -2,7 +2,12 @@
   <div class="login-container">
     <div class="login-box">
       <h2 class="login-title">用户登录</h2>
-      <el-form :model="loginForm" :rules="rules" ref="loginFormRef" class="login-form">
+      <el-form
+        :model="loginForm"
+        :rules="rules"
+        ref="loginFormRef"
+        class="login-form"
+      >
         <el-form-item prop="username">
           <el-input
             v-model="loginForm.username"
@@ -22,9 +27,6 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-checkbox v-model="loginForm.remember">记住我</el-checkbox>
-        </el-form-item>
-        <el-form-item>
           <el-button
             type="primary"
             @click="handleLogin"
@@ -34,6 +36,16 @@
           >
             登录
           </el-button>
+          <el-button
+            type="primary"
+            class="login-button"
+            plain
+            @click="handleRegister"
+            size="large"
+            style="margin-left: 0px"
+          >
+            注册
+          </el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -41,25 +53,34 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from "vue";
-import { ElMessage } from "element-plus";
+import { getUserInfoAPI, loginAPI, registerAPI } from "@/api/user";
+import { useUserStore } from "@/store/user";
 import type { FormInstance, FormRules } from "element-plus";
+import { ElMessage } from "element-plus";
+import { reactive, ref } from "vue";
 import { useRouter } from "vue-router";
+
+// 实例化用户模块
+const userStore = useUserStore();
 
 const router = useRouter();
 const loginFormRef = ref<FormInstance>();
 const loading = ref(false);
 
 const loginForm = reactive({
-  username: "admin",
-  password: "password",
-  remember: false,
+  username: "",
+  password: "",
 });
 
 const rules = reactive<FormRules>({
   username: [
     { required: true, message: "请输入用户名", trigger: "blur" },
-    { min: 3, max: 20, message: "用户名长度在 3 到 20 个字符", trigger: "blur" },
+    {
+      min: 3,
+      max: 20,
+      message: "用户名长度在 3 到 20 个字符",
+      trigger: "blur",
+    },
   ],
   password: [
     { required: true, message: "请输入密码", trigger: "blur" },
@@ -67,6 +88,7 @@ const rules = reactive<FormRules>({
   ],
 });
 
+// 登录
 const handleLogin = async () => {
   if (!loginFormRef.value) return;
 
@@ -74,13 +96,52 @@ const handleLogin = async () => {
     if (valid) {
       loading.value = true;
       // 模拟登录请求
-      setTimeout(() => {
-        loading.value = false;
-        ElMessage.success("登录成功！");
-        router.push("/");
-      }, 1000);
+      loginAPI(loginForm)
+        .then((res) => {
+          if (res.status === 0) {
+            // 存储token
+            userStore.setToken(res.token);
+            getUserInfoAPI().then((res) => {
+              userStore.setUserInfo(res.data);
+            });
+            ElMessage.success("登录成功！");
+            router.push("/");
+          } else {
+            ElMessage.error(res.msg || "登录失败");
+          }
+        })
+        .finally(() => {
+          loading.value = false;
+        });
     } else {
       ElMessage.error("请填写完整的登录信息");
+      return false;
+    }
+  });
+};
+
+// 注册
+const handleRegister = async () => {
+  if (!loginFormRef.value) return;
+
+  await loginFormRef.value.validate((valid) => {
+    if (valid) {
+      loading.value = true;
+      // 模拟注册请求
+      registerAPI(loginForm)
+        .then((res) => {
+          if (res.status === 0) {
+            ElMessage.success("注册成功！");
+            router.push("/login");
+          } else {
+            ElMessage.error(res.msg || "注册失败");
+          }
+        })
+        .finally(() => {
+          loading.value = false;
+        });
+    } else {
+      ElMessage.error("请填写完整的注册信息");
       return false;
     }
   });
@@ -93,7 +154,7 @@ const handleLogin = async () => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-color: #333;
 }
 
 .login-box {

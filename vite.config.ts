@@ -27,6 +27,8 @@ export default defineConfig({
     alias: {
       // 配置 @ 指向 src 目录
       "@": path.resolve(__dirname, "./src"),
+      "@api": path.resolve(__dirname, "./src/api"),
+      "@utils": path.resolve(__dirname, "./src/utils"),
     },
   },
 });

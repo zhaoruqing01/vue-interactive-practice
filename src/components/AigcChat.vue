@@ -4,20 +4,23 @@
       <span>AI 助手</span>
       <span class="close-btn" @click="$emit('close')">×</span>
     </div>
-    
+
     <div class="chat-body" ref="chatBodyRef">
-      <div 
-        v-for="(msg, index) in messages" 
+      <div
+        v-for="(msg, index) in messages"
         :key="index"
         :class="['message', `message-${msg.role}`]"
       >
-        <div class="avatar">{{ msg.role === 'user' ? '我' : 'AI' }}</div>
+        <div class="avatar">{{ msg.role === "user" ? "我" : "AI" }}</div>
         <div class="content">
-          <!-- 简单展示文本，如果需要支持 Markdown 可以引入第三方库 -->
-          <span v-if="msg.content">{{ msg.content }}</span>
-          <span v-else-if="msg.role === 'ai' && isGenerating && index === messages.length - 1" class="loading-dots">
-            输入中...
-          </span>
+          <span>{{ msg.content }}</span>
+
+          <span
+            v-if="
+              msg.role === 'ai' && isGenerating && index === messages.length - 1
+            "
+            class="blinking-cursor"
+          ></span>
         </div>
       </div>
     </div>
@@ -30,7 +33,10 @@
         :disabled="isGenerating"
       >
         <template #append>
-          <el-button @click="sendMessage" :disabled="!inputMessage.trim() || isGenerating">
+          <el-button
+            @click="sendMessage"
+            :disabled="!inputMessage.trim() || isGenerating"
+          >
             发送
           </el-button>
         </template>
@@ -40,105 +46,126 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { nextTick, ref } from "vue";
 
-defineEmits(['close'])
+defineEmits(["close"]);
 
 interface Message {
-  role: 'user' | 'ai'
-  content: string
+  role: "user" | "ai";
+  content: string;
 }
 
 const messages = ref<Message[]>([
-  { role: 'ai', content: '你好！我是 AI 助手，有什么可以帮你的吗？' }
-])
-const inputMessage = ref('')
-const isGenerating = ref(false)
-const chatBodyRef = ref<HTMLElement | null>(null)
+  { role: "ai", content: "你好！我是 AI 助手，有什么可以帮你的吗？" },
+]);
+const inputMessage = ref("");
+const isGenerating = ref(false);
+const chatBodyRef = ref<HTMLElement | null>(null);
 
 // 滚动到底部
 const scrollToBottom = async () => {
-  await nextTick()
+  await nextTick();
   if (chatBodyRef.value) {
-    chatBodyRef.value.scrollTop = chatBodyRef.value.scrollHeight
+    chatBodyRef.value.scrollTop = chatBodyRef.value.scrollHeight;
   }
-}
+};
 
 const sendMessage = async () => {
-  const text = inputMessage.value.trim()
-  if (!text || isGenerating.value) return
+  const text = inputMessage.value.trim();
+  if (!text || isGenerating.value) return;
 
   // 添加用户消息
-  messages.value.push({ role: 'user', content: text })
-  inputMessage.value = ''
-  
-  // 🔥 修复：创建本次对话的 AI 占位消息，直接保存引用（不使用find）
-  const currentAiMessage = { role: 'ai', content: '' }
-  messages.value.push(currentAiMessage)
-  
-  isGenerating.value = true
-  scrollToBottom()
+  messages.value.push({ role: "user", content: text });
+  inputMessage.value = "";
+
+  // 创建本次对话的 AI 占位消息
+  const currentAiMessage = { role: "ai", content: "" } as Message;
+  messages.value.push(currentAiMessage);
+
+  isGenerating.value = true;
+  scrollToBottom();
 
   try {
-    const response = await fetch(`http://localhost:8080/api/chat?message=${encodeURIComponent(text)}`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'text/event-stream'
-      }
-    })
+    const response = await fetch(
+      `http://localhost:8080/api/chat?message=${encodeURIComponent(text)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "text/event-stream",
+        },
+      },
+    );
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder('utf-8')
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder("utf-8");
 
-    if (!reader) throw new Error('Failed to get reader from response')
+    if (!reader) throw new Error("Failed to get reader from response");
+
+    // 🔥 关键修复：增加一个 buffer 来存储不完整的字符串
+    let buffer = "";
 
     while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
+      const { done, value } = await reader.read();
+      if (done) break;
 
-      const chunk = decoder.decode(value, { stream: true })
-      const lines = chunk.split('\n')
-      
+      // 每次读取到的 chunk 拼接到 buffer 中
+      buffer += decoder.decode(value, { stream: true });
+
+      // 按换行符分割
+      const lines = buffer.split("\n");
+
+      // 🔥 关键修复：把最后一行（可能是不完整的 JSON）弹出，留到下一次循环拼接
+      buffer = lines.pop() || "";
+
       for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const dataStr = line.substring(6);
-            if (dataStr) {
-              try {
-                const data = JSON.parse(dataStr);
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith("data: ")) {
+          const dataStr = trimmedLine.substring(6).trim();
 
-                if (data.error) {
-                  // 直接使用当前AI消息，不查找
-                  currentAiMessage.content = data.error;
-                  isGenerating.value = false;
-                  return;
-                } else if (data.done) {
-                  isGenerating.value = false;
-                  scrollToBottom();
-                  return;
-                } else if (data.text) {
-                  // 🔥 直接拼接在本次的AI消息上
-                  currentAiMessage.content += data.text;
-                  requestAnimationFrame(() => scrollToBottom());
-                }
-              } catch (error) {
-                console.error("Error parsing SSE data:", error);
+          // 处理流结束的特殊标记（很多后端会发 data: [DONE]）
+          if (dataStr === "[DONE]") {
+            isGenerating.value = false;
+            scrollToBottom();
+            return;
+          }
+
+          if (dataStr) {
+            try {
+              const data = JSON.parse(dataStr);
+
+              if (data.error) {
+                currentAiMessage.content = data.error;
+                isGenerating.value = false;
+                return;
+              } else if (data.done) {
+                isGenerating.value = false;
+                scrollToBottom();
+                return;
+              } else if (data.text) {
+                // 成功解析，拼接到前端并触发打字机效果
+                currentAiMessage.content += data.text;
+                requestAnimationFrame(() => scrollToBottom());
               }
+            } catch (error) {
+              // 如果遇到极端的 JSON 截断，打印出来方便调试
+              console.warn("JSON Parse Error on chunk:", dataStr);
             }
           }
+        }
       }
     }
   } catch (error) {
-    console.error('Chat error:', error)
-    currentAiMessage.content = '抱歉，服务出现异常，请稍后再试。'
+    console.error("Chat error:", error);
+    currentAiMessage.content = "抱歉，服务出现异常，请稍后再试。";
   } finally {
-    isGenerating.value = false
-    scrollToBottom()
+    isGenerating.value = false;
+    scrollToBottom();
   }
-}
+};
 </script>
 
 <style scoped>
@@ -218,10 +245,12 @@ const sendMessage = async () => {
   padding: 10px 14px;
   border-radius: 8px;
   background: white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   word-break: break-word;
   line-height: 1.5;
   font-size: 14px;
+  /* 确保换行符能够正常显示 */
+  white-space: pre-wrap;
 }
 
 .message-user .content {
@@ -234,15 +263,25 @@ const sendMessage = async () => {
   background: #fff;
 }
 
-.loading-dots {
-  color: #909399;
-  font-style: italic;
-  animation: blink 1.4s infinite both;
+/* 闪烁光标样式 */
+.blinking-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 1em;
+  background-color: #333;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+  animation: cursor-blink 1s step-end infinite;
 }
 
-@keyframes blink {
-  0% { opacity: 0.2; }
-  20% { opacity: 1; }
-  100% { opacity: 0.2; }
+/* 光标闪烁动画关键帧 */
+@keyframes cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 </style>

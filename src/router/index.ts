@@ -79,6 +79,14 @@ const routes: Array<RouteRecordRaw> = [
           title: "node文章列表",
         },
       },
+      {
+        path: "bff",
+        name: "BFF",
+        component: () => import("../views/BFF/index.vue"),
+        meta: {
+          title: "BFF",
+        },
+      },
     ],
   },
   // 匹配所有未定义路由重定向到首页

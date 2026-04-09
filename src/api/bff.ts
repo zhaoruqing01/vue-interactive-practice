@@ -6,5 +6,5 @@ import request from "@/utils/request";
  * @returns
  */
 export const getBFFListAPI = (params?: any) => {
-  return request.get("/api/bff", { params });
+  return request.get("/bff/bff", { params });
 };

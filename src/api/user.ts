@@ -6,7 +6,7 @@ import request from "@/utils/request";
  * @returns
  */
 export const loginAPI = (params: any) => {
-  return request.post("/api/login", params);
+  return request.post("/user/login", params);
 };
 
 /**
@@ -15,7 +15,7 @@ export const loginAPI = (params: any) => {
  * @returns
  */
 export const registerAPI = (params: any) => {
-  return request.post("/api/reguser", params);
+  return request.post("/user/reguser", params);
 };
 
 /**

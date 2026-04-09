@@ -72,20 +72,29 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
-        path: "article",
-        name: "Article",
-        component: () => import("../views/Article/index.vue"),
+        path: "nodejs",
+        name: "NodeJS",
         meta: {
-          title: "node文章列表",
+          title: "nodejs",
         },
-      },
-      {
-        path: "bff",
-        name: "BFF",
-        component: () => import("../views/BFF/index.vue"),
-        meta: {
-          title: "BFF",
-        },
+        children: [
+          {
+            path: "article",
+            name: "Article",
+            component: () => import("../views/Article/index.vue"),
+            meta: {
+              title: "node文章列表",
+            },
+          },
+          {
+            path: "bff",
+            name: "BFF",
+            component: () => import("../views/BFF/index.vue"),
+            meta: {
+              title: "BFF",
+            },
+          },
+        ],
       },
     ],
   },

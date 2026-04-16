@@ -211,7 +211,7 @@ onMounted(() => {
     console.log("✅ Socket 连接成功");
   });
 
-  // 消息完全有socket控制
+  // 消息完全由socket控制
   socket.value.on("receiveGroupMsg", (msg) => {
     const groupId = msg.groupId;
     const isSelf = msg.userId === userStore.userInfo.userId;
@@ -355,9 +355,6 @@ const deleteRoom = (roomId: number) => {
         // 群主执行删除
         return deleteGroupAPI(roomId);
       } else {
-        // 非群主执行退出
-        // 注意：请确保 quitGroupAPI 已在上方 import 且真实存在
-        // 如果没有单独退出接口，可能需要调用其他特定接口
         return exitGroupAPI(roomId);
       }
     })

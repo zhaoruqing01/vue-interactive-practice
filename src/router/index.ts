@@ -81,7 +81,7 @@ const routes: Array<RouteRecordRaw> = [
           {
             path: "article",
             name: "Article",
-            component: () => import("../views/Article/index.vue"),
+            component: () => import("../views/NodeJs/Article/index.vue"),
             meta: {
               title: "node文章列表",
             },
@@ -89,12 +89,28 @@ const routes: Array<RouteRecordRaw> = [
           {
             path: "bff",
             name: "BFF",
-            component: () => import("../views/BFF/index.vue"),
+            component: () => import("../views/NodeJs/BFF/index.vue"),
             meta: {
               title: "BFF",
             },
           },
+          {
+            path: "socket",
+            name: "Socket",
+            component: () => import("../views/NodeJs/Socket/index.vue"),
+            meta: {
+              title: "Socket",
+            },
+          },
         ],
+      },
+      {
+        path: "gsap",
+        name: "GSAP",
+        component: () => import("../views/GSAP/index.vue"),
+        meta: {
+          title: "GSAP",
+        },
       },
     ],
   },

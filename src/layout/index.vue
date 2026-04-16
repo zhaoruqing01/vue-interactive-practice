@@ -4,7 +4,7 @@
     <el-aside :width="isCollapse ? '64px' : '200px'" class="aside">
       <div class="logo">
         <!-- 折叠时显示简称或图标 -->
-        {{ isCollapse ? '系统' : '交互练习系统' }}
+        {{ isCollapse ? "系统" : "交互练习系统" }}
       </div>
       <el-menu
         :default-active="route.path"
@@ -18,22 +18,25 @@
       >
         <template v-for="item in menuRoutes" :key="item.path">
           <!-- 判断是否有子路由 -->
-          <el-sub-menu v-if="item.children && item.children.length > 0" :index="`/${item.path}`">
+          <el-sub-menu
+            v-if="item.children && item.children.length > 0"
+            :index="`/${item.path}`"
+          >
             <template #title>
               <el-icon><Menu /></el-icon>
               <span>{{ item.meta?.title }}</span>
             </template>
             <!-- 遍历子路由 -->
-            <el-menu-item 
-              v-for="child in item.children" 
-              :key="child.path" 
+            <el-menu-item
+              v-for="child in item.children"
+              :key="child.path"
               :index="`/${item.path}/${child.path}`"
             >
               <el-icon><Document /></el-icon>
               <span>{{ child.meta?.title }}</span>
             </el-menu-item>
           </el-sub-menu>
-          
+
           <!-- 无子路由的直接显示 -->
           <el-menu-item v-else :index="`/${item.path}`">
             <el-icon><Menu /></el-icon>
@@ -74,7 +77,7 @@
 
 <script setup lang="ts">
 import { useUserStore } from "@/store/user";
-import { Menu, Document, Expand, Fold } from "@element-plus/icons-vue";
+import { Document, Expand, Fold, Menu } from "@element-plus/icons-vue";
 import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
@@ -159,7 +162,7 @@ const handleLogout = () => {
 }
 
 .collapse-icon:hover {
-  color: #409EFF;
+  color: #409eff;
 }
 
 .header-right {

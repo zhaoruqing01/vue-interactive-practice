@@ -35,9 +35,19 @@ request.interceptors.response.use(
       ElMessage.error("登录过期，请重新登录");
       return Promise.reject(new Error("登录过期"));
     }
+    // 如果业务状态码不为 200 并且不是 401，通常也可能代表业务错误
+    // 如果你需要所有非 200 的都走到 catch，可以放开这里的注释
+    // if (response.code !== 200) {
+    //   return Promise.reject(response);
+    // }
     return response;
   },
   (error) => {
+    // 处理 HTTP 状态码不为 2xx 的情况 (如 400, 500 等)
+    // 这样 400 错误的 response.data 就可以作为 reject 的内容传递给 catch
+    if (error.response && error.response.data) {
+      return Promise.reject(error.response.data);
+    }
     return Promise.reject(error);
   },
 );

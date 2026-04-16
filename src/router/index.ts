@@ -102,6 +102,14 @@ const routes: Array<RouteRecordRaw> = [
               title: "Socket",
             },
           },
+          {
+            path: "room",
+            name: "Room",
+            component: () => import("../views/NodeJs/Socket-Room/index.vue"),
+            meta: {
+              title: "Socket-Room",
+            },
+          },
         ],
       },
       {

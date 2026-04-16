@@ -25,6 +25,7 @@
     "@vueuse/core": "^14.2.1",
     "axios": "^1.14.0",
     "danmaku": "^2.0.9",
+    "dayjs": "^1.11.20",
     "element-plus": "^2.13.1",
     "pinia": "^3.0.4",
     "pinia-plugin-persistedstate": "^4.7.1",

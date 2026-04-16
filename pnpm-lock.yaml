@@ -51,6 +51,9 @@ importers:
       danmaku:
         specifier: ^2.0.9
         version: 2.0.9
+      dayjs:
+        specifier: ^1.11.20
+        version: 1.11.20
       element-plus:
         specifier: ^2.13.1
         version: 2.13.1(vue@3.5.22(typescript@5.9.3))
@@ -758,8 +761,8 @@ packages:
   danmaku@2.0.9:
     resolution: {integrity: sha512-K8XM3tWiKR7adbt45NgWucmFzY91eHKiLDPbeFXCZ2KWEju+3hgSIaWMkdg8dnxVTguKOc82vF/0DXm1Y02EUA==}
 
-  dayjs@1.11.19:
-    resolution: {integrity: sha512-t5EcLVS6QPBNqM2z8fakk/NKel+Xzshgt8FFKAn+qwlD1pzZWxh0nVCrvFK7ZDb6XucZeF9z8C7CBWTRIVApAw==}
+  dayjs@1.11.20:
+    resolution: {integrity: sha512-YbwwqR/uYpeoP4pu043q+LTDLFBLApUP6VxRihdfNTqu4ubqMlGDLd6ErXhEgsyvY0K6nCs7nggYumAN+9uEuQ==}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -2077,7 +2080,7 @@ snapshots:
 
   danmaku@2.0.9: {}
 
-  dayjs@1.11.19: {}
+  dayjs@1.11.20: {}
 
   debug@4.4.3:
     dependencies:
@@ -2118,7 +2121,7 @@ snapshots:
       '@types/lodash-es': 4.17.12
       '@vueuse/core': 10.11.1(vue@3.5.22(typescript@5.9.3))
       async-validator: 4.2.5
-      dayjs: 1.11.19
+      dayjs: 1.11.20
       lodash: 4.17.21
       lodash-es: 4.17.22
       lodash-unified: 1.0.3(@types/lodash-es@4.17.12)(lodash-es@4.17.22)(lodash@4.17.21)

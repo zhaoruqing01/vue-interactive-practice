@@ -1,6 +1,6 @@
 <template>
   <div class="chat-container">
-    <h1>聊天室</h1>
+    <h1>全体公共聊天室</h1>
 
     <!-- 消息列表区域 -->
     <div class="message-list" ref="messageListRef">
@@ -31,17 +31,16 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref } from "vue";
-// 引入Socket客户端
+import { getGroupMsgAPI } from "@/api/group";
 import { useUserStore } from "@/store/user";
 import { io } from "socket.io-client";
+import { nextTick, onMounted, onUnmounted, ref } from "vue";
 
-// 实例化用户模块
 const userStore = useUserStore();
-// 保存自己的id,用于判断是否是自己发送的消息
-const selfId = ref();
+const socket = io(import.meta.env.VITE_BASE_URL, {
+  transports: ["websocket"],
+});
 
-// 消息类型定义（完全保留）
 interface Message {
   sender: string;
   text: string;
@@ -49,82 +48,79 @@ interface Message {
   isSelf: boolean;
 }
 
-// 响应式数据（完全保留）
 const messages = ref<Message[]>([
   {
     sender: "系统",
-    text: "欢迎进入聊天室！",
+    text: "欢迎进入公共聊天室！",
     time: new Date().toLocaleTimeString(),
     isSelf: false,
   },
 ]);
+
 const inputMessage = ref("");
 const messageListRef = ref<HTMLElement | null>(null);
 
-// ============== 核心修改：创建Socket连接 ==============
-const socket = io("http://127.0.0.1:3007", {
-  transports: ["websocket"], // 强制WebSocket，更稳定
-});
+// ======================================
+// 监听公共消息（正确版）
+// ======================================
+const receivePublicMsg = (msg: any) => {
+  const isSelf = msg.userId === userStore.userInfo.userId;
 
-socket.on("connect", () => {
-  selfId.value = socket.id; // 拿到自己的ID
-  console.log("我的ID：", socket.id);
-});
-
-// 监听服务端推送的实时消息
-const receiveMessage = (msg: Omit<Message, "isSelf">) => {
   messages.value.push({
-    ...msg,
-    isSelf: msg.userId === selfId.value, // 别人发的消息，显示在左侧
+    sender: msg.username,
+    text: msg.content,
+    time: new Date(msg.sendTime).toLocaleTimeString(),
+    isSelf,
   });
   scrollToBottom();
 };
 
-// 组件挂载：监听Socket消息
 onMounted(() => {
-  // 监听服务端广播的聊天消息
-  socket.on("chat message", receiveMessage);
-
-  // 连接成功提示
-  socket.on("connect", () => {
-    console.log("✅ 连接聊天室成功");
+  // 监听正确的事件名,表示的是监听该事件名并执行对应操作
+  socket.on("receivePublicMsg", receivePublicMsg);
+  // 获取聊天记录
+  getPublicChatRecord().then(() => {
+    scrollToBottom();
   });
 });
 
-// 组件销毁：移除监听（防止内存泄漏）
 onUnmounted(() => {
-  socket.off("chat message", receiveMessage);
+  socket.off("receivePublicMsg", receivePublicMsg);
 });
 
-// ============== 发送消息（替换模拟逻辑，改为真实Socket发送） ==============
+const getPublicChatRecord = async () => {
+  const res = await getGroupMsgAPI(0);
+  if (res.code === 200) {
+    messages.value = res.data.map((item: any) => {
+      return {
+        sender: item.username,
+        text: item.content,
+        time: new Date(item.send_time).toLocaleTimeString(),
+        isSelf: item.user_id === userStore.userInfo.userId,
+      };
+    });
+  }
+};
+
+// ======================================
+// 发送公共消息（正确版）
+// ======================================
 const sendMessage = () => {
   if (!inputMessage.value.trim()) return;
 
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString();
-
-  // 构建消息对象
+  // 发给后端的正确结构
   const msgData = {
-    sender: userStore.userInfo.username || "匿名用户",
-    text: inputMessage.value,
-    time: timeStr,
+    userId: userStore.userInfo.userId,
+    username: userStore.userInfo.username || "匿名用户",
+    content: inputMessage.value,
   };
 
-  // 1. 自己的消息直接渲染到页面
-  // messages.value.push({
-  //   ...msgData,
-  //   isSelf: true,
-  // });
+  // ✅ 正确事件名,emit表示发送,on表示监听,to表示发送对象
+  socket.emit("sendPublicMsg", msgData);
 
-  // 2. 通过Socket发送给后端
-  socket.emit("chat message", msgData);
-
-  // 3. 清空输入框+滚动到底部
   inputMessage.value = "";
-  scrollToBottom();
 };
 
-// 滚动到底部辅助函数（完全保留）
 const scrollToBottom = async () => {
   await nextTick();
   if (messageListRef.value) {
@@ -134,6 +130,7 @@ const scrollToBottom = async () => {
 </script>
 
 <style scoped>
+/* 你的样式完全不用改 */
 .chat-container {
   display: flex;
   flex-direction: column;

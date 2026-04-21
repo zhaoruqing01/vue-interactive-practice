@@ -99,7 +99,7 @@ const routes: Array<RouteRecordRaw> = [
             name: "Socket",
             component: () => import("../views/NodeJs/Socket/index.vue"),
             meta: {
-              title: "Socket",
+              title: "Public-Chat",
             },
           },
           {
@@ -107,7 +107,15 @@ const routes: Array<RouteRecordRaw> = [
             name: "Room",
             component: () => import("../views/NodeJs/Socket-Room/index.vue"),
             meta: {
-              title: "Socket-Room",
+              title: "Groups-Chat",
+            },
+          },
+          {
+            path: "user",
+            name: "User",
+            component: () => import("../views/NodeJs/Socket-User/index.vue"),
+            meta: {
+              title: "User-Chat",
             },
           },
         ],

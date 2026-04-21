@@ -25,22 +25,28 @@ request.interceptors.request.use(
   },
 );
 
+interface Response<T> {
+  code?: number;
+  status?: number;
+  msg: string;
+  data: T;
+}
+
 // 响应拦截器
-request.interceptors.response.use(
+request.interceptors.response.use<any>(
   (response) => {
-    response = response.data;
-    console.log(response, "响应数据");
-    if (response.status === 401) {
+    const res: Response<any> = response.data;
+    if (res.status === 401) {
       router.push("/login");
       ElMessage.error("登录过期，请重新登录");
       return Promise.reject(new Error("登录过期"));
     }
     // 如果业务状态码不为 200 并且不是 401，通常也可能代表业务错误
     // 如果你需要所有非 200 的都走到 catch，可以放开这里的注释
-    // if (response.code !== 200) {
-    //   return Promise.reject(response);
+    // if (res.code !== 200) {
+    //   return Promise.reject(res);
     // }
-    return response;
+    return res;
   },
   (error) => {
     // 处理 HTTP 状态码不为 2xx 的情况 (如 400, 500 等)

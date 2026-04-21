@@ -233,6 +233,12 @@ onMounted(() => {
       scrollToBottom();
     }
   });
+
+  // 系统提示
+  socket.value.on("systemMsg", (msg) => {
+    console.log(msg, "公共提示");
+    ElMessage.success(msg.content);
+  });
 });
 
 onUnmounted(() => {
@@ -269,7 +275,7 @@ const switchRoom = async (room: Room) => {
   }
 
   currentRoom.value = room;
-  socket.value?.emit("joinGroup", room.group_id);
+  socket.value?.emit("joinGroup", room.group_id, userStore.userInfo.userId);
 
   // ======================
   // 在这里加载历史聊天记录

@@ -26,3 +26,16 @@ export const getApplyHistoryAPI = (userId: number) => {
 export const getFriendListAPI = (userId: number) => {
   return request.get(`/api/friendsList/${userId}`);
 };
+
+/**
+ * 查询用户好友聊天记录
+ * @param userId
+ * @param friendUserId
+ * @returns
+ */
+export const getFriendChatHistoryAPI = (
+  userId: number,
+  friendUserId: number,
+) => {
+  return request.get(`/api/chatHistory/${userId}/${friendUserId}`);
+};

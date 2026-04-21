@@ -25,7 +25,7 @@ export const joinGroupAPI = (groupId: number) => {
   return request.post(`/api/groupAddMember/${groupId}`);
 };
 
-// 获取群聊记录
+// 获取群聊/私聊记录
 export const getGroupMsgAPI = (groupId: number) => {
   return request.get(`/api/groupChatRecord/${groupId}`);
 };

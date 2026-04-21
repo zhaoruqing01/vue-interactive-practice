@@ -76,12 +76,15 @@
       <div v-else class="user-list">
         <div
           v-for="user in users"
-          :key="user.id"
-          :class="['user-item', { active: currentUser?.id === user.id }]"
+          :key="user.fromUserId"
+          :class="[
+            'user-item',
+            { active: currentUser?.fromUserId === user.fromUserId },
+          ]"
           @click="switchUser(user)"
         >
           <span class="user-name">{{ user.fromUsername }}</span>
-          <span v-if="user.status === 1" class="status-dot online"></span>
+          <span v-if="user.isOnline" class="status-dot online"></span>
           <span v-else class="status-dot offline"></span>
         </div>
         <div v-if="users.length === 0" class="empty-tip">暂无用户列表</div>
@@ -133,9 +136,11 @@
 import {
   getAllUsersAPI,
   getApplyHistoryAPI,
+  getFriendChatHistoryAPI,
   getFriendListAPI,
 } from "@/api/userFriends";
 import { useUserStore } from "@/store/user";
+import dayjs from "dayjs";
 import { ElMessage } from "element-plus";
 import { io, Socket } from "socket.io-client";
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
@@ -147,6 +152,7 @@ interface User {
   apply_msg: string;
   create_time: string;
   status: number;
+  isOnline: boolean;
 }
 
 interface FriendRequest {
@@ -181,9 +187,34 @@ const messageListRef = ref<HTMLElement | null>(null);
 
 const currentMessages = computed(() => {
   if (!currentUser.value) return [];
-  return messagesMap.value[currentUser.value.id] || [];
+  return messagesMap.value[currentUser.value.fromUserId] || [];
 });
 
+// 获取好友聊天记录
+const getFriendChatHistory = async (friendUserId: number) => {
+  try {
+    const res = await getFriendChatHistoryAPI(
+      userStore.userInfo.userId,
+      friendUserId,
+    );
+    if (res.code === 200) {
+      // 修复：将后端返回的历史消息格式转换为前端 Message 格式
+      const historyMessages = (res.data || []).map((msg: any) => ({
+        sender: msg.username || msg.fromUsername || "未知用户",
+        text: msg.content,
+        time: dayjs(msg.sendTime).format("YYYY-MM-DD HH:mm:ss"),
+        isSelf: msg.fromUserId === userStore.userInfo.userId,
+        targetUserId:
+          msg.fromUserId === userStore.userInfo.userId
+            ? msg.toUserId
+            : msg.fromUserId,
+      }));
+      messagesMap.value[friendUserId] = historyMessages;
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || "获取好友聊天记录失败");
+  }
+};
 // 获取好友申请历史 ✅ 修复：userId字段
 const getApplyHistory = async () => {
   try {
@@ -233,6 +264,7 @@ const addFriend = (user: User) => {
 onMounted(() => {
   getApplyHistory();
   getFriendList();
+
   socket.value = io(import.meta.env.VITE_BASE_URL, {
     transports: ["websocket"],
   });
@@ -282,26 +314,56 @@ onMounted(() => {
     ElMessage.error(data.msg);
   });
 
+  // 监听好友在线状态变化
+  socket.value.on("friend:status:change", (data) => {
+    console.log(data, "在线data");
+
+    const friend = users.value.find((u) => u.fromUserId === data.targetUserId);
+    if (friend) {
+      friend.isOnline = data.isOnline;
+      if (data.isOnline) {
+        ElMessage.success(`${friend.fromUsername}上线了`);
+      } else {
+        ElMessage.info(`${friend.fromUsername}下线了`);
+      }
+    }
+  });
+
   // 私聊消息
   socket.value.on("receivePrivateMsg", (msg) => {
-    const chatPartnerId =
-      msg.fromUserId === userStore.userInfo.userId
-        ? msg.toUserId
-        : msg.fromUserId;
+    // 1. 先拿到自己的 ID
+    const myId = userStore.userInfo.userId;
+
+    // 2. 判断这条消息是不是【我自己发的】
+    const isSelf = msg.fromUserId === myId;
+
+    // 3. 计算：当前消息属于哪个聊天对象（非常关键！）
+    const chatPartnerId = isSelf ? msg.toUserId : msg.fromUserId;
+
+    // 4. 构造消息（字段统一）
     const message = {
       sender: msg.fromUsername,
       text: msg.content,
-      time: new Date(msg.sendTime).toLocaleTimeString(),
-      isSelf: msg.fromUserId === userStore.userInfo.userId,
+      time: dayjs(msg.sendTime).format("YYYY-MM-DD HH:mm:ss"),
+      isSelf: isSelf,
       targetUserId: chatPartnerId,
     };
 
-    if (!messagesMap.value[chatPartnerId])
+    // 5. 存入消息列表
+    if (!messagesMap.value[chatPartnerId]) {
       messagesMap.value[chatPartnerId] = [];
+    }
     messagesMap.value[chatPartnerId].push(message);
 
-    if (currentUser.value?.id === chatPartnerId) scrollToBottom();
-    else ElMessage.info(`收到 ${msg.fromUsername} 的消息`);
+    // 6. 如果正在聊天 → 滚动到底部
+    // 注意：currentUser.value.fromUserId 必须是对方ID！！！
+    if (currentUser.value?.fromUserId === chatPartnerId) {
+      scrollToBottom();
+    }
+    // 7. 【只有不是自己发的，并且不在当前聊天页，才提示】
+    else if (!isSelf) {
+      ElMessage.info(`收到 ${msg.fromUsername} 的消息`);
+    }
   });
 
   socket.value.on("systemMsg", (msg) => ElMessage.success(msg.content));
@@ -339,20 +401,22 @@ const rejectFriendRequest = (req: FriendRequest) => {
 };
 
 const switchUser = (user: User) => {
-  if (currentUser.value?.id === user.id) return;
+  if (currentUser.value?.fromUserId === user.fromUserId) return;
   currentUser.value = user;
-  if (!messagesMap.value[user.id]) messagesMap.value[user.id] = [];
+  getFriendChatHistory(user.fromUserId);
+  if (!messagesMap.value[user.fromUserId])
+    messagesMap.value[user.fromUserId] = [];
   nextTick(scrollToBottom);
 };
 
 const sendMessage = () => {
   if (!inputMessage.value.trim() || !currentUser.value || !socket.value) return;
   const msgData = {
-    toUserId: currentUser.value.id,
+    toUserId: currentUser.value.fromUserId,
     fromUserId: userStore.userInfo.userId, // 修复这里
     fromUsername: userStore.userInfo.username,
     content: inputMessage.value,
-    sendTime: new Date().toISOString(),
+    sendTime: dayjs().format("YYYY-MM-DD HH:mm:ss"),
   };
   socket.value.emit("sendPrivateMsg", msgData);
   inputMessage.value = "";

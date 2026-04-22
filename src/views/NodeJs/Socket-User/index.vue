@@ -155,9 +155,10 @@ import {
   getFriendListAPI,
 } from "@/api/userFriends";
 import { useUserStore } from "@/store/user";
+import getSocket from "@/utils/socket";
 import dayjs from "dayjs";
 import { ElMessage } from "element-plus";
-import { io, Socket } from "socket.io-client";
+import { Socket } from "socket.io-client";
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 
 interface User {
@@ -290,95 +291,114 @@ onMounted(() => {
   getApplyHistory();
   getFriendList();
 
-  socket.value = io(import.meta.env.VITE_BASE_URL, {
-    transports: ["websocket"],
-    secure: window.location.protocol === "https:",
-    rejectUnauthorized: false,
-  });
+  socket.value = getSocket();
 
-  socket.value.on("connect", () => {
-    console.log("✅ Socket 连接成功");
-    socket.value?.emit("user:online", {
-      userId: userStore.userInfo.userId,
-      username: userStore.userInfo.username,
-    });
-  });
-
-  socket.value.on("friend:apply:receive", (data) => {
-    const exists = friendRequests.value.some(
-      (r) => r.fromUserId === data.fromUserId,
-    );
-    if (!exists) {
-      friendRequests.value.unshift({
-        fromUserId: data.fromUserId,
-        fromUsername: data.fromUsername,
-        create_time: data.createTime,
-      });
-    }
-  });
-
-  socket.value.on("friend:accept:success", (data) => {
-    ElMessage.success(data.msg);
-    getApplyHistory();
-  });
-
-  socket.value.on("friend:refuse:success", (data) => {
-    ElMessage.warning(data.msg);
-    getApplyHistory();
-  });
-
-  socket.value.on("addFriendSuccess", (data) => {
-    ElMessage.success(data.msg);
-    getApplyHistory();
-  });
-
-  socket.value.on("addFriendError", (data) => {
-    ElMessage.error(data.msg);
-  });
-
-  socket.value.on("friend:status:change", (data) => {
-    const friend = users.value.find((u) => u.fromUserId === data.targetUserId);
-    if (friend) {
-      friend.isOnline = data.isOnline;
-      if (data.isOnline) {
-        ElMessage.success(`${friend.fromUsername}上线了`);
-      } else {
-        ElMessage.info(`${friend.fromUsername}下线了`);
-      }
-    }
-  });
-
-  socket.value.on("receivePrivateMsg", (msg) => {
-    const myId = userStore.userInfo.userId;
-    const isSelf = msg.fromUserId === myId;
-    const chatPartnerId = isSelf ? msg.toUserId : msg.fromUserId;
-
-    const message = {
-      sender: msg.fromUsername,
-      text: msg.content,
-      time: dayjs(msg.sendTime).format("YYYY-MM-DD HH:mm:ss"),
-      isSelf: isSelf,
-      targetUserId: chatPartnerId,
-    };
-
-    if (!messagesMap.value[chatPartnerId]) {
-      messagesMap.value[chatPartnerId] = [];
-    }
-    messagesMap.value[chatPartnerId].push(message);
-
-    if (currentUser.value?.fromUserId === chatPartnerId) {
-      scrollToBottom();
-    } else if (!isSelf) {
-      ElMessage.info(`收到 ${msg.fromUsername} 的消息`);
-    }
-  });
-
-  socket.value.on("systemMsg", (msg) => ElMessage.success(msg.content));
+  if (socket.value.connected) {
+    handleConnect();
+  }
+  socket.value.on("connect", handleConnect);
+  socket.value.on("friend:apply:receive", handleFriendApplyReceive);
+  socket.value.on("friend:accept:success", handleFriendAcceptSuccess);
+  socket.value.on("friend:refuse:success", handleFriendRefuseSuccess);
+  socket.value.on("addFriendSuccess", handleAddFriendSuccess);
+  socket.value.on("addFriendError", handleAddFriendError);
+  socket.value.on("friend:status:change", handleFriendStatusChange);
+  socket.value.on("receivePrivateMsg", handleReceivePrivateMsg);
+  socket.value.on("systemMsg", handleSystemMsg);
 });
+
+const handleConnect = () => {
+  console.log("✅ Socket 连接成功");
+  socket.value?.emit("user:online", {
+    userId: userStore.userInfo.userId,
+    username: userStore.userInfo.username,
+  });
+};
+
+const handleFriendApplyReceive = (data: any) => {
+  const exists = friendRequests.value.some(
+    (r) => r.fromUserId === data.fromUserId,
+  );
+  if (!exists) {
+    friendRequests.value.unshift({
+      fromUserId: data.fromUserId,
+      fromUsername: data.fromUsername,
+      create_time: data.createTime,
+    });
+  }
+};
+
+const handleFriendAcceptSuccess = (data: any) => {
+  ElMessage.success(data.msg);
+  getApplyHistory();
+};
+
+const handleFriendRefuseSuccess = (data: any) => {
+  ElMessage.warning(data.msg);
+  getApplyHistory();
+};
+
+const handleAddFriendSuccess = (data: any) => {
+  ElMessage.success(data.msg);
+  getApplyHistory();
+};
+
+const handleAddFriendError = (data: any) => {
+  ElMessage.error(data.msg);
+};
+
+const handleFriendStatusChange = (data: any) => {
+  const friend = users.value.find((u) => u.fromUserId === data.targetUserId);
+  if (friend) {
+    friend.isOnline = data.isOnline;
+    if (data.isOnline) {
+      ElMessage.success(`${friend.fromUsername}上线了`);
+    } else {
+      ElMessage.info(`${friend.fromUsername}下线了`);
+    }
+  }
+};
+
+const handleReceivePrivateMsg = (msg: any) => {
+  const myId = userStore.userInfo.userId;
+  const isSelf = msg.fromUserId === myId;
+  const chatPartnerId = isSelf ? msg.toUserId : msg.fromUserId;
+
+  const message = {
+    sender: msg.fromUsername,
+    text: msg.content,
+    time: dayjs(msg.sendTime).format("YYYY-MM-DD HH:mm:ss"),
+    isSelf: isSelf,
+    targetUserId: chatPartnerId,
+  };
+
+  if (!messagesMap.value[chatPartnerId]) {
+    messagesMap.value[chatPartnerId] = [];
+  }
+  messagesMap.value[chatPartnerId].push(message);
+
+  if (currentUser.value?.fromUserId === chatPartnerId) {
+    scrollToBottom();
+  } else if (!isSelf) {
+    ElMessage.info(`收到 ${msg.fromUsername} 的消息`);
+  }
+};
+
+const handleSystemMsg = (msg: any) => ElMessage.success(msg.content);
 
 onUnmounted(() => {
   window.removeEventListener("resize", checkIsMobile);
-  socket.value?.disconnect();
+  if (socket.value) {
+    socket.value.off("connect", handleConnect);
+    socket.value.off("friend:apply:receive", handleFriendApplyReceive);
+    socket.value.off("friend:accept:success", handleFriendAcceptSuccess);
+    socket.value.off("friend:refuse:success", handleFriendRefuseSuccess);
+    socket.value.off("addFriendSuccess", handleAddFriendSuccess);
+    socket.value.off("addFriendError", handleAddFriendError);
+    socket.value.off("friend:status:change", handleFriendStatusChange);
+    socket.value.off("receivePrivateMsg", handleReceivePrivateMsg);
+    socket.value.off("systemMsg", handleSystemMsg);
+  }
 });
 
 const acceptFriendRequest = (req: FriendRequest) => {

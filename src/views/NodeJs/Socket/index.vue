@@ -47,12 +47,12 @@
 <script setup lang="ts">
 import { getGroupMsgAPI } from "@/api/group";
 import { useUserStore } from "@/store/user";
+import getSocket from "@/utils/socket";
 import { QuillEditor } from "@vueup/vue-quill";
 import "@vueup/vue-quill/dist/vue-quill.snow.css";
 import hljs from "highlight.js";
 import "highlight.js/styles/atom-one-dark.css";
 import { marked } from "marked";
-import { io } from "socket.io-client";
 import { nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
 
 // 配置 marked 解析 + 代码高亮 (适配 v18)
@@ -68,9 +68,7 @@ marked.setOptions({
   gfm: true, // 支持表格、删除线等
 });
 const userStore = useUserStore();
-const socket = io(import.meta.env.VITE_BASE_URL, {
-  transports: ["websocket"],
-});
+const socket = getSocket();
 
 interface Message {
   sender: string;

@@ -154,9 +154,10 @@ import {
   joinGroupAPI,
 } from "@/api/group";
 import { useUserStore } from "@/store/user";
+import getSocket from "@/utils/socket";
 import dayjs from "dayjs";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { io, Socket } from "socket.io-client";
+import { Socket } from "socket.io-client";
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 
 // 类型定义
@@ -222,36 +223,40 @@ onMounted(() => {
   window.addEventListener("resize", checkIsMobile);
   getJoinedGroupList();
 
-  socket.value = io(import.meta.env.VITE_BASE_URL, {
-    transports: ["websocket"],
-  });
+  socket.value = getSocket();
 
   // 监听群消息
-  socket.value.on("receiveGroupMsg", (msg) => {
-    const groupId = msg.groupId;
-    const isSelf = msg.userId === userStore.userInfo.userId;
-    const message = {
-      sender: msg.username,
-      text: msg.content,
-      time: dayjs(msg.sendTime).format("HH:mm:ss"),
-      isSelf,
-      isOwner: msg.userId === currentRoom.value?.owner_id,
-    };
-
-    if (!messagesMap.value[groupId]) messagesMap.value[groupId] = [];
-    messagesMap.value[groupId].push(message);
-
-    if (currentRoom.value?.group_id === groupId) {
-      scrollToBottom();
-    }
-  });
-
-  socket.value.on("systemMsg", (msg) => ElMessage.success(msg.content));
+  socket.value.on("receiveGroupMsg", handleReceiveGroupMsg);
+  socket.value.on("systemMsg", handleSystemMsg);
 });
+
+const handleReceiveGroupMsg = (msg: any) => {
+  const groupId = msg.groupId;
+  const isSelf = msg.userId === userStore.userInfo.userId;
+  const message = {
+    sender: msg.username,
+    text: msg.content,
+    time: dayjs(msg.sendTime).format("HH:mm:ss"),
+    isSelf,
+    isOwner: msg.userId === currentRoom.value?.owner_id,
+  };
+
+  if (!messagesMap.value[groupId]) messagesMap.value[groupId] = [];
+  messagesMap.value[groupId].push(message);
+
+  if (currentRoom.value?.group_id === groupId) {
+    scrollToBottom();
+  }
+};
+
+const handleSystemMsg = (msg: any) => ElMessage.success(msg.content);
 
 onUnmounted(() => {
   window.removeEventListener("resize", checkIsMobile);
-  socket.value?.disconnect();
+  if (socket.value) {
+    socket.value.off("receiveGroupMsg", handleReceiveGroupMsg);
+    socket.value.off("systemMsg", handleSystemMsg);
+  }
 });
 
 // 切换群聊

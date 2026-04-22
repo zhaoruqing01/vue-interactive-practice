@@ -13,7 +13,6 @@ export default defineConfig({
     open: true, // 自动打开浏览器（可选）
     // 由于vite默认只允许localhost访问，所以需要配置allowedHosts
     allowedHosts: true,
-    hmr: { clientPort: 443 },
   },
   plugins: [
     vue(),

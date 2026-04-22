@@ -1,7 +1,11 @@
 <template>
-  <div class="socket-user-container">
+  <div class="socket-user-container" :class="{ 'is-mobile': isMobile }">
     <!-- 左侧：用户列表 -->
-    <div class="sidebar">
+    <div
+      class="sidebar"
+      v-if="!isMobile || !showChatOnMobile"
+      :style="{ pointerEvents: showChatOnMobile ? 'none' : 'auto' }"
+    >
       <div class="sidebar-header">
         <h2>在线用户</h2>
         <div class="header-actions">
@@ -79,7 +83,9 @@
           :key="user.fromUserId"
           :class="[
             'user-item',
-            { active: currentUser?.fromUserId === user.fromUserId },
+            {
+              active: !isMobile && currentUser?.fromUserId === user.fromUserId,
+            },
           ]"
           @click="switchUser(user)"
         >
@@ -92,9 +98,18 @@
     </div>
 
     <!-- 右侧：聊天区域 -->
-    <div class="chat-area" v-if="currentUser">
+    <div
+      class="chat-area"
+      v-if="currentUser && (!isMobile || showChatOnMobile)"
+      :style="{ pointerEvents: showChatOnMobile ? 'auto' : 'none' }"
+    >
       <div class="chat-header">
-        <h3>{{ currentUser.fromUsername }}</h3>
+        <div class="header-left">
+          <button v-if="isMobile" class="btn-back" @click="backToList">
+            <span class="back-icon">〈</span> 返回
+          </button>
+          <h3>{{ currentUser.fromUsername }}</h3>
+        </div>
         <span class="user-id">ID: {{ currentUser.id }}</span>
       </div>
 
@@ -105,9 +120,7 @@
           :class="['message-item', msg.isSelf ? 'self' : 'other']"
         >
           <div class="message-content">
-            <span class="sender">{{ msg.sender }}</span>
             <p class="text">{{ msg.text }}</p>
-            <span class="time">{{ msg.time }}</span>
           </div>
         </div>
         <div v-if="currentMessages.length === 0" class="empty-chat">
@@ -122,11 +135,13 @@
           placeholder="请输入消息..."
           type="text"
         />
-        <button @click="sendMessage">发送</button>
+        <button @click="sendMessage" @touchstart.prevent="sendMessage">
+          发送
+        </button>
       </div>
     </div>
 
-    <div class="chat-area empty-state" v-else>
+    <div class="chat-area empty-state" v-else-if="!isMobile">
       <p>请选择一个用户开始私聊</p>
     </div>
   </div>
@@ -179,11 +194,22 @@ const friendRequests = ref<FriendRequest[]>([]);
 const searchKeyword = ref("");
 const searchResults = ref<User[]>([]);
 const isSearchVisible = ref(false);
-const isRequestsExpanded = ref(false); // 默认折叠
+const isRequestsExpanded = ref(false);
 
 const messagesMap = ref<Record<number, Message[]>>({});
 const inputMessage = ref("");
 const messageListRef = ref<HTMLElement | null>(null);
+
+// 移动端适配
+const isMobile = ref(false);
+const showChatOnMobile = ref(false);
+
+const checkIsMobile = () => {
+  isMobile.value = window.matchMedia("(max-width: 768px)").matches;
+};
+const backToList = () => {
+  showChatOnMobile.value = false;
+};
 
 const currentMessages = computed(() => {
   if (!currentUser.value) return [];
@@ -198,7 +224,6 @@ const getFriendChatHistory = async (friendUserId: number) => {
       friendUserId,
     );
     if (res.code === 200) {
-      // 修复：将后端返回的历史消息格式转换为前端 Message 格式
       const historyMessages = (res.data || []).map((msg: any) => ({
         sender: msg.username || msg.fromUsername || "未知用户",
         text: msg.content,
@@ -215,10 +240,10 @@ const getFriendChatHistory = async (friendUserId: number) => {
     ElMessage.error(error.message || "获取好友聊天记录失败");
   }
 };
-// 获取好友申请历史 ✅ 修复：userId字段
+
 const getApplyHistory = async () => {
   try {
-    const res = await getApplyHistoryAPI(userStore.userInfo.userId); // 修复这里
+    const res = await getApplyHistoryAPI(userStore.userInfo.userId);
     if (res.code === 200) {
       friendRequests.value = res.data;
     }
@@ -227,7 +252,6 @@ const getApplyHistory = async () => {
   }
 };
 
-// 获取用户好友列表
 const getFriendList = async () => {
   try {
     const res = await getFriendListAPI(userStore.userInfo.userId);
@@ -239,7 +263,6 @@ const getFriendList = async () => {
   }
 };
 
-// 搜索用户
 const searchUsers = async () => {
   try {
     const res = await getAllUsersAPI(searchKeyword.value);
@@ -251,34 +274,36 @@ const searchUsers = async () => {
   }
 };
 
-// 添加好友 ✅ 核心修复：userId传参错误
 const addFriend = (user: User) => {
   socket.value?.emit("friend_apply", {
     friendId: user.id,
-    userId: userStore.userInfo.userId, // 🔥 修复：从 id 改为 userId
+    userId: userStore.userInfo.userId,
     username: userStore.userInfo.username,
-    applyMsg: "申请加为好友", // 补全参数，避免空值
+    applyMsg: "申请加为好友",
   });
 };
 
 onMounted(() => {
+  checkIsMobile();
+  window.addEventListener("resize", checkIsMobile);
+
   getApplyHistory();
   getFriendList();
 
   socket.value = io(import.meta.env.VITE_BASE_URL, {
     transports: ["websocket"],
+    secure: window.location.protocol === "https:",
+    rejectUnauthorized: false,
   });
 
   socket.value.on("connect", () => {
     console.log("✅ Socket 连接成功");
-    // ✅ 统一事件名
     socket.value?.emit("user:online", {
       userId: userStore.userInfo.userId,
       username: userStore.userInfo.username,
     });
   });
 
-  // 监听新好友申请
   socket.value.on("friend:apply:receive", (data) => {
     const exists = friendRequests.value.some(
       (r) => r.fromUserId === data.fromUserId,
@@ -292,19 +317,16 @@ onMounted(() => {
     }
   });
 
-  // 监听同意通知
   socket.value.on("friend:accept:success", (data) => {
     ElMessage.success(data.msg);
     getApplyHistory();
   });
 
-  // 监听拒绝通知
   socket.value.on("friend:refuse:success", (data) => {
     ElMessage.warning(data.msg);
     getApplyHistory();
   });
 
-  // 监听申请结果
   socket.value.on("addFriendSuccess", (data) => {
     ElMessage.success(data.msg);
     getApplyHistory();
@@ -314,10 +336,7 @@ onMounted(() => {
     ElMessage.error(data.msg);
   });
 
-  // 监听好友在线状态变化
   socket.value.on("friend:status:change", (data) => {
-    console.log(data, "在线data");
-
     const friend = users.value.find((u) => u.fromUserId === data.targetUserId);
     if (friend) {
       friend.isOnline = data.isOnline;
@@ -329,18 +348,11 @@ onMounted(() => {
     }
   });
 
-  // 私聊消息
   socket.value.on("receivePrivateMsg", (msg) => {
-    // 1. 先拿到自己的 ID
     const myId = userStore.userInfo.userId;
-
-    // 2. 判断这条消息是不是【我自己发的】
     const isSelf = msg.fromUserId === myId;
-
-    // 3. 计算：当前消息属于哪个聊天对象（非常关键！）
     const chatPartnerId = isSelf ? msg.toUserId : msg.fromUserId;
 
-    // 4. 构造消息（字段统一）
     const message = {
       sender: msg.fromUsername,
       text: msg.content,
@@ -349,19 +361,14 @@ onMounted(() => {
       targetUserId: chatPartnerId,
     };
 
-    // 5. 存入消息列表
     if (!messagesMap.value[chatPartnerId]) {
       messagesMap.value[chatPartnerId] = [];
     }
     messagesMap.value[chatPartnerId].push(message);
 
-    // 6. 如果正在聊天 → 滚动到底部
-    // 注意：currentUser.value.fromUserId 必须是对方ID！！！
     if (currentUser.value?.fromUserId === chatPartnerId) {
       scrollToBottom();
-    }
-    // 7. 【只有不是自己发的，并且不在当前聊天页，才提示】
-    else if (!isSelf) {
+    } else if (!isSelf) {
       ElMessage.info(`收到 ${msg.fromUsername} 的消息`);
     }
   });
@@ -370,13 +377,13 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener("resize", checkIsMobile);
   socket.value?.disconnect();
 });
 
-// 同意好友 ✅ 修复：userId字段
 const acceptFriendRequest = (req: FriendRequest) => {
   socket.value?.emit("friend:accept", {
-    userId: userStore.userInfo.userId, // 修复这里
+    userId: userStore.userInfo.userId,
     applyUserId: req.fromUserId,
     username: userStore.userInfo.username,
     applyUserName: req.fromUsername,
@@ -387,10 +394,9 @@ const acceptFriendRequest = (req: FriendRequest) => {
   getFriendList();
 };
 
-// 拒绝好友 ✅ 修复：userId字段
 const rejectFriendRequest = (req: FriendRequest) => {
   socket.value?.emit("friend:refuse", {
-    userId: userStore.userInfo.userId, // 修复这里
+    userId: userStore.userInfo.userId,
     applyUserId: req.fromUserId,
     username: userStore.userInfo.username,
     applyUserName: req.fromUsername,
@@ -401,8 +407,20 @@ const rejectFriendRequest = (req: FriendRequest) => {
 };
 
 const switchUser = (user: User) => {
-  if (currentUser.value?.fromUserId === user.fromUserId) return;
+  // 如果是同一用户，仅确保移动端聊天界面显示即可，无需重复加载数据
+  if (currentUser.value?.fromUserId === user.fromUserId) {
+    if (isMobile.value) {
+      showChatOnMobile.value = true;
+    }
+    return;
+  }
+
   currentUser.value = user;
+
+  if (isMobile.value) {
+    showChatOnMobile.value = true;
+  }
+
   getFriendChatHistory(user.fromUserId);
   if (!messagesMap.value[user.fromUserId])
     messagesMap.value[user.fromUserId] = [];
@@ -410,12 +428,14 @@ const switchUser = (user: User) => {
 };
 
 const sendMessage = () => {
-  if (!inputMessage.value.trim() || !currentUser.value || !socket.value) return;
+  const content = inputMessage.value.trim();
+  if (!content || !currentUser.value || !socket.value) return;
+
   const msgData = {
     toUserId: currentUser.value.fromUserId,
-    fromUserId: userStore.userInfo.userId, // 修复这里
+    fromUserId: userStore.userInfo.userId,
     fromUsername: userStore.userInfo.username,
-    content: inputMessage.value,
+    content: content,
     sendTime: dayjs().format("YYYY-MM-DD HH:mm:ss"),
   };
   socket.value.emit("sendPrivateMsg", msgData);
@@ -441,7 +461,6 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
 </script>
 
 <style scoped>
-/* 复用并微调 Socket-Room 的样式 */
 .socket-user-container {
   display: flex;
   height: calc(100vh - 120px);
@@ -451,6 +470,7 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
   overflow: hidden;
   font-family: Arial, sans-serif;
   background-color: #fff;
+  position: relative;
 }
 
 .sidebar {
@@ -475,10 +495,9 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
   color: #333;
 }
 
-/* 新增：好友请求区域样式 */
 .friend-requests-area {
   border-bottom: 1px solid #e8e8e8;
-  background-color: #fffbe6; /* 淡黄色背景提示有待处理事项 */
+  background-color: #fffbe6;
 }
 
 .section-title {
@@ -488,7 +507,7 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
   color: #d48806;
   background-color: #fff1b8;
   border-bottom: 1px solid #ffe58f;
-  cursor: pointer; /* 提示可点击 */
+  cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -502,25 +521,6 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
 .expand-icon {
   font-size: 10px;
   margin-left: 8px;
-}
-
-/* 动画容器 */
-.slide-down-enter-active,
-.slide-down-leave-active {
-  transition: all 0.3s ease;
-  overflow: hidden;
-}
-
-.slide-down-enter-from,
-.slide-down-leave-to {
-  max-height: 0;
-  opacity: 0;
-}
-
-.slide-down-enter-to,
-.slide-down-leave-from {
-  max-height: 200px; /* 根据内容预估最大高度 */
-  opacity: 1;
 }
 
 .request-list-content {
@@ -746,6 +746,28 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-back {
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  color: #333;
+}
+
+.back-icon {
+  font-weight: bold;
+  margin-right: 4px;
 }
 
 .chat-header h3 {
@@ -837,6 +859,8 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
   padding: 15px;
   background-color: #fff;
   border-top: 1px solid #eee;
+  flex-shrink: 0;
+  margin-bottom: 60px;
 }
 
 .input-area input {
@@ -855,7 +879,7 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
 
 .input-area button {
   padding: 0 20px;
-  background-color: #409eff;
+  background-color: #07c160;
   color: white;
   border: none;
   border-radius: 4px;
@@ -871,6 +895,37 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
   justify-content: center;
   align-items: center;
   color: #999;
+}
+
+@media (max-width: 768px) {
+  .socket-user-container {
+    height: 100vh;
+    width: 100vw;
+    border: none;
+    border-radius: 0;
+    position: fixed;
+    top: 0;
+    left: 0;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: 100%;
+  }
+
+  .chat-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 9999;
+    background: #fafafa;
+  }
+
+  .message-content {
+    max-width: 85%;
+  }
 }
 
 .slide-down-enter-active,

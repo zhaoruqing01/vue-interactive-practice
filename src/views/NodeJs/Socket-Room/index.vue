@@ -1,7 +1,6 @@
 <template>
-  <div class="socket-room-container">
-    <!-- 左侧：群聊列表 -->
-    <div class="sidebar">
+  <div class="socket-room-container" :class="{ 'is-mobile': isMobile }">
+    <div class="sidebar" v-if="!isMobile || !showChatOnMobile">
       <div class="sidebar-header">
         <h2>群聊列表</h2>
         <div class="header-actions">
@@ -29,7 +28,7 @@
             ref="searchInputRef"
             v-model="searchKeyword"
             @keyup.enter="searchRooms"
-            placeholder="输入名称回车搜索..."
+            placeholder="搜索公共群组..."
             class="search-input"
           />
           <button @click="searchRooms" class="btn-search-exec">Go</button>
@@ -53,7 +52,6 @@
       </div>
 
       <div v-else class="room-list">
-        <!-- 群聊列表 -->
         <div
           v-for="room in rooms"
           :key="room.group_id"
@@ -67,20 +65,31 @@
           <button
             class="btn-delete"
             @click.stop="deleteRoom(room.group_id)"
-            title="删除群聊"
+            title="删除/退出"
           >
             ×
           </button>
         </div>
-        <div v-if="rooms.length === 0" class="empty-tip">暂无群聊，请创建</div>
+        <div v-if="rooms.length === 0" class="empty-tip">
+          暂无群聊，请创建或搜索
+        </div>
       </div>
     </div>
 
-    <!-- 右侧：聊天区域 -->
-    <div class="chat-area" v-if="currentRoom">
+    <div
+      class="chat-area"
+      v-if="currentRoom && (!isMobile || showChatOnMobile)"
+    >
       <div class="chat-header">
-        <h3>{{ currentRoom.group_name }}</h3>
-        <span class="room-id">ID: {{ currentRoom.group_id }}</span>
+        <div class="header-left">
+          <button v-if="isMobile" class="btn-back" @click="backToList">
+            <span class="back-icon">〈</span> 列表
+          </button>
+          <h3>{{ currentRoom.group_name }}</h3>
+        </div>
+        <span class="room-id" v-if="!isMobile"
+          >ID: {{ currentRoom.group_id }}</span
+        >
       </div>
 
       <div class="message-list" ref="messageListRef">
@@ -90,16 +99,15 @@
           :class="['message-item', msg.isSelf ? 'self' : 'other']"
         >
           <div class="message-content">
-            <span class="sender">
+            <span class="sender" v-if="!msg.isSelf">
               {{ msg.sender }}
               <span v-if="msg.isOwner" class="owner-badge">群主</span>
             </span>
             <p class="text">{{ msg.text }}</p>
-            <span class="time">{{ msg.time }}</span>
           </div>
         </div>
         <div v-if="currentMessages.length === 0" class="empty-chat">
-          开始新的对话吧~
+          开始聊点什么吧~
         </div>
       </div>
 
@@ -114,8 +122,8 @@
       </div>
     </div>
 
-    <div class="chat-area empty-state" v-else>
-      <p>请选择或创建一个群聊开始聊天</p>
+    <div class="chat-area empty-state" v-else-if="!isMobile">
+      <p>选择一个群聊开始对话</p>
     </div>
 
     <div v-if="showCreateModal" class="modal-overlay">
@@ -123,12 +131,12 @@
         <h3>创建新群聊</h3>
         <input
           v-model="newRoomName"
-          placeholder="输入群聊名称"
+          placeholder="群聊名称"
           @keyup.enter="createRoom"
         />
         <div class="modal-actions">
           <button @click="showCreateModal = false">取消</button>
-          <button @click="createRoom" class="btn-confirm">确定</button>
+          <button @click="createRoom" class="btn-confirm">创建</button>
         </div>
       </div>
     </div>
@@ -151,6 +159,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { io, Socket } from "socket.io-client";
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 
+// 类型定义
 interface Room {
   create_time: string;
   group_id: number;
@@ -158,31 +167,41 @@ interface Room {
   is_deleted: number;
   owner_id: number;
 }
-
 interface Message {
   sender: string;
   text: string;
   time: string;
   isSelf: boolean;
-  isOwner?: boolean; // 新增：是否是群主发送的消息
+  isOwner?: boolean;
 }
 
 const userStore = useUserStore();
 const socket = ref<Socket | null>(null);
 
+// 状态
 const rooms = ref<Room[]>([]);
 const currentRoom = ref<Room | null>(null);
 const showCreateModal = ref(false);
 const newRoomName = ref("");
-
 const searchKeyword = ref("");
 const searchResults = ref<Room[]>([]);
 const isSearchVisible = ref(false);
-
 const messagesMap = ref<Record<string, Message[]>>({});
 const inputMessage = ref("");
 const messageListRef = ref<HTMLElement | null>(null);
-const currentTime = ref(dayjs().format("YYYY-MM-DD HH:mm:ss"));
+
+// --- 移动端适配逻辑 ---
+const isMobile = ref(false);
+const showChatOnMobile = ref(false);
+
+const checkIsMobile = () => {
+  isMobile.value = window.matchMedia("(max-width: 768px)").matches;
+};
+
+const backToList = () => {
+  showChatOnMobile.value = false;
+};
+// --------------------
 
 const currentMessages = computed(() => {
   if (!currentRoom.value) return [];
@@ -192,41 +211,34 @@ const currentMessages = computed(() => {
 const getJoinedGroupList = async () => {
   try {
     const res = await getJoinedGroupListAPI();
-    if (res.code === 200) {
-      rooms.value = res.data;
-    }
-  } catch (error) {
-    ElMessage.error(error.message || "获取已加入群聊失败");
+    if (res.code === 200) rooms.value = res.data;
+  } catch (error: any) {
+    ElMessage.error("获取群聊列表失败");
   }
 };
 
 onMounted(() => {
+  checkIsMobile();
+  window.addEventListener("resize", checkIsMobile);
   getJoinedGroupList();
 
   socket.value = io(import.meta.env.VITE_BASE_URL, {
     transports: ["websocket"],
   });
 
-  socket.value.on("connect", () => {
-    console.log("✅ Socket 连接成功");
-  });
-
-  // 消息完全由socket控制
+  // 监听群消息
   socket.value.on("receiveGroupMsg", (msg) => {
     const groupId = msg.groupId;
     const isSelf = msg.userId === userStore.userInfo.userId;
-
     const message = {
       sender: msg.username,
       text: msg.content,
-      time: new Date(msg.sendTime).toLocaleTimeString(),
+      time: dayjs(msg.sendTime).format("HH:mm:ss"),
       isSelf,
-      isOwner: msg.userId === currentRoom.value?.owner_id, // 新增：标记是否为群主
+      isOwner: msg.userId === currentRoom.value?.owner_id,
     };
 
-    if (!messagesMap.value[groupId]) {
-      messagesMap.value[groupId] = [];
-    }
+    if (!messagesMap.value[groupId]) messagesMap.value[groupId] = [];
     messagesMap.value[groupId].push(message);
 
     if (currentRoom.value?.group_id === groupId) {
@@ -234,147 +246,93 @@ onMounted(() => {
     }
   });
 
-  // 系统提示
-  socket.value.on("systemMsg", (msg) => {
-    console.log(msg, "公共提示");
-    ElMessage.success(msg.content);
-  });
+  socket.value.on("systemMsg", (msg) => ElMessage.success(msg.content));
 });
 
 onUnmounted(() => {
+  window.removeEventListener("resize", checkIsMobile);
   socket.value?.disconnect();
 });
 
-const searchRooms = () => {
-  if (!searchKeyword.value.trim()) return;
-  getGroupListAPI(searchKeyword.value).then((res) => {
-    searchResults.value = res.data;
-  });
-};
-
-const joinSearchedRoom = (room: Room) => {
-  joinGroupAPI(room.group_id)
-    .then(() => {
-      ElMessage.success("加入群聊成功");
-      getJoinedGroupList();
-      switchRoom(room);
-    })
-    .catch(() => {
-      ElMessage.error("加入群聊失败");
-    });
-
-  searchKeyword.value = "";
-  searchResults.value = [];
-};
-
+// 切换群聊
 const switchRoom = async (room: Room) => {
-  if (currentRoom.value?.group_id === room.group_id) return;
+  if (currentRoom.value?.group_id === room.group_id) {
+    if (isMobile.value) showChatOnMobile.value = true;
+    return;
+  }
 
   if (currentRoom.value) {
     socket.value?.emit("quitGroup", currentRoom.value.group_id);
   }
 
   currentRoom.value = room;
+  // 移动端切换视图
+  if (isMobile.value) showChatOnMobile.value = true;
+
   socket.value?.emit("joinGroup", room.group_id, userStore.userInfo.userId);
 
-  // ======================
-  // 在这里加载历史聊天记录
-  // ======================
-  const historyRes = await getGroupMsgAPI(room.group_id);
-  if (historyRes && historyRes.code === 200) {
-    messagesMap.value[room.group_id] = historyRes.data.map((item) => ({
+  // 加载历史消息
+  const res = await getGroupMsgAPI(room.group_id);
+  if (res?.code === 200) {
+    messagesMap.value[room.group_id] = res.data.map((item: any) => ({
       sender: item.username,
       text: item.content,
-      time: new Date(item.send_time).toLocaleTimeString(),
+      time: dayjs(item.send_time).format("HH:mm:ss"),
       isSelf: item.user_id === userStore.userInfo.userId,
-      isOwner: item.user_id === room.owner_id, // 新增：标记是否为群主
+      isOwner: item.user_id === room.owner_id,
     }));
-  } else {
-    messagesMap.value[room.group_id] = [];
   }
-
-  nextTick(() => {
-    scrollToBottom();
-  });
+  nextTick(() => scrollToBottom());
 };
 
 const sendMessage = () => {
   if (!inputMessage.value.trim() || !currentRoom.value || !socket.value) return;
-
   const msgData = {
     groupId: currentRoom.value.group_id,
     userId: userStore.userInfo.userId,
-    username: userStore.userInfo.username || "匿名用户",
+    username: userStore.userInfo.username,
     content: inputMessage.value,
   };
-
   socket.value.emit("sendGroupMsg", msgData);
-
-  if (!messagesMap.value[currentRoom.value.group_id]) {
-    messagesMap.value[currentRoom.value.group_id] = [];
-  }
-
   inputMessage.value = "";
   scrollToBottom();
 };
 
 const createRoom = async () => {
   if (!newRoomName.value.trim()) return;
-
   try {
     const res = await createGroupAPI({
       group_name: newRoomName.value,
       owner_id: userStore.userInfo.userId,
       is_deleted: false,
-      create_time: currentTime.value,
+      create_time: dayjs().format("YYYY-MM-DD HH:mm:ss"),
     });
-
     if (res.code === 200) {
-      newRoomName.value = "";
       showCreateModal.value = false;
+      newRoomName.value = "";
       getJoinedGroupList();
-      ElMessage.success("创建房间成功");
+      ElMessage.success("群聊创建成功");
     }
-  } catch (err: any) {
-    ElMessage.error(err.msg || "创建失败");
+  } catch (err) {
+    ElMessage.error("创建失败");
   }
 };
 
 const deleteRoom = (roomId: number) => {
-  // 查找当前房间信息以获取 owner_id
   const room = rooms.value.find((r) => r.group_id === roomId);
   if (!room) return;
-
   const isOwner = room.owner_id === userStore.userInfo.userId;
-  const actionText = isOwner ? "删除" : "退出";
-  const tipText = isOwner
-    ? "确定要删除这个群聊吗？此操作不可恢复。"
-    : "确定要退出这个群聊吗？";
-
-  ElMessageBox.confirm(tipText, `${actionText}提示`, {
-    confirmButtonText: "确定",
-    cancelButtonText: "取消",
-    type: "warning",
-  })
+  ElMessageBox.confirm(
+    isOwner ? "确定解散该群聊吗？" : "确定退出该群聊吗？",
+    "提示",
+  )
+    .then(() => (isOwner ? deleteGroupAPI(roomId) : exitGroupAPI(roomId)))
     .then(() => {
-      if (isOwner) {
-        // 群主执行删除
-        return deleteGroupAPI(roomId);
-      } else {
-        return exitGroupAPI(roomId);
-      }
-    })
-    .then(() => {
-      ElMessage.success(`${actionText}成功`);
+      ElMessage.success("操作成功");
       getJoinedGroupList();
       if (currentRoom.value?.group_id === roomId) {
         currentRoom.value = null;
-      }
-    })
-    .catch((err) => {
-      if (err !== "cancel") {
-        // 忽略用户取消的情况
-        ElMessage.error(err.message || `${actionText}失败`);
+        showChatOnMobile.value = false;
       }
     });
 };
@@ -389,223 +347,165 @@ const scrollToBottom = async () => {
 const toggleSearch = () => {
   isSearchVisible.value = !isSearchVisible.value;
 };
+const searchRooms = () => {
+  if (!searchKeyword.value.trim()) return;
+  getGroupListAPI(searchKeyword.value).then((res) => {
+    searchResults.value = res.data;
+  });
+};
+const joinSearchedRoom = (room: Room) => {
+  joinGroupAPI(room.group_id).then(() => {
+    ElMessage.success("已加入群聊");
+    getJoinedGroupList();
+    switchRoom(room);
+  });
+  searchKeyword.value = "";
+  searchResults.value = [];
+};
 
 const searchInputRef = ref<HTMLInputElement | null>(null);
 </script>
 
 <style scoped>
-/* 你的样式不变 */
 .socket-room-container {
   display: flex;
-  height: calc(100vh - 120px);
-  width: calc(100vw - 250px);
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  overflow: hidden;
-  font-family: Arial, sans-serif;
+  height: 100%; /* 由外部 Layout 决定高度 */
+  width: 100%;
   background-color: #fff;
+  overflow: hidden;
 }
 
+/* 列表侧边栏 */
 .sidebar {
-  width: 250px;
-  background-color: #f0f2f5;
+  width: 280px;
+  background-color: #f7f7f7;
   border-right: 1px solid #e8e8e8;
   display: flex;
   flex-direction: column;
 }
 
 .sidebar-header {
-  padding: 15px;
-  border-bottom: 1px solid #e8e8e8;
+  padding: 20px 15px;
+  background-color: #eee;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
 .sidebar-header h2 {
+  font-size: 18px;
   margin: 0;
-  font-size: 16px;
   color: #333;
 }
 
 .header-actions {
   display: flex;
-  gap: 5px;
+  gap: 8px;
 }
 
-.btn-create {
-  background-color: #409eff;
-  color: white;
-  border: none;
-  padding: 4px 8px;
+.btn-create,
+.btn-search-toggle {
+  background: #fff;
+  border: 1px solid #ddd;
   border-radius: 4px;
+  padding: 2px 8px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .btn-create:hover {
-  background-color: #66b1ff;
-}
-
-.btn-search-toggle {
-  background-color: #f0f2f5;
-  color: #999;
-  border: none;
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.btn-search-toggle:hover {
-  background-color: #e8e8e8;
-}
-
-.btn-search-toggle.active {
-  background-color: #409eff;
-  color: white;
+  color: #409eff;
+  border-color: #409eff;
 }
 
 .search-area {
-  padding: 10px 15px;
-  border-bottom: 1px solid #e8e8e8;
+  padding: 10px;
+  background-color: #fff;
+  border-bottom: 1px solid #eee;
   display: flex;
   gap: 5px;
-  background-color: #fff;
 }
 
 .search-input {
   flex: 1;
-  padding: 6px 10px;
+  padding: 6px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 12px;
-  outline: none;
+  font-size: 13px;
 }
 
-.search-input:focus {
-  border-color: #409eff;
-}
-
-.btn-search-exec {
-  padding: 6px 10px;
-  background-color: #409eff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.btn-search-exec:hover {
-  background-color: #66b1ff;
-}
-
-.search-results {
-  flex: 1;
-  overflow-y: auto;
-  background-color: #fff;
-}
-
-.result-title {
-  padding: 8px 15px;
-  font-size: 12px;
-  color: #999;
-  background-color: #fafafa;
-  border-bottom: 1px solid #eee;
-}
-
-.search-result-item {
-  cursor: pointer;
-  background-color: #f9f9f9;
-}
-
-.search-result-item:hover {
-  background-color: #e6f7ff;
-}
-
-.join-tip {
-  font-size: 10px;
-  color: #409eff;
-}
-
-.room-list {
-  flex: 1;
-  overflow-y: auto;
-}
-
+/* 列表项样式 */
 .room-item {
-  padding: 12px 15px;
+  padding: 15px;
+  border-bottom: 1px solid #eee;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
   transition: background 0.2s;
-  border-bottom: 1px solid #ebeef5;
 }
 
 .room-item:hover {
-  background-color: #e6f7ff;
+  background-color: #eee;
 }
-
 .room-item.active {
-  background-color: #bae7ff;
-  border-left: 4px solid #409eff;
+  background-color: #e2e2e2;
 }
 
 .room-name {
-  font-size: 14px;
+  font-size: 15px;
   color: #333;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 500;
 }
 
 .btn-delete {
-  background: transparent;
   border: none;
-  color: #999;
+  background: transparent;
+  color: #ccc;
   font-size: 18px;
   cursor: pointer;
-  padding: 0 5px;
-  line-height: 1;
 }
-
 .btn-delete:hover {
   color: #f56c6c;
 }
 
-.empty-tip {
-  padding: 20px;
-  text-align: center;
-  color: #999;
-  font-size: 12px;
-}
-
+/* 聊天区域 */
 .chat-area {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background-color: #fafafa;
+  background-color: #f5f5f5;
 }
 
 .chat-header {
-  padding: 10px 20px;
-  background-color: #fff;
-  border-bottom: 1px solid #eee;
+  padding: 15px 20px;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ddd;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.chat-header h3 {
-  margin: 0;
-  font-size: 16px;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.room-id {
-  font-size: 12px;
-  color: #999;
+.btn-back {
+  border: none;
+  background: transparent;
+  color: #333;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.back-icon {
+  margin-right: 4px;
+  font-weight: bold;
 }
 
 .message-list {
@@ -614,89 +514,73 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 15px;
-}
-
-.empty-chat {
-  text-align: center;
-  color: #ccc;
-  margin-top: 50px;
+  gap: 12px;
 }
 
 .message-item {
   display: flex;
   width: 100%;
 }
-
 .message-item.self {
   justify-content: flex-end;
 }
 
-.message-item.other {
-  justify-content: flex-start;
-}
-
 .message-content {
-  max-width: 70%;
-  padding: 8px 12px;
-  border-radius: 8px;
+  max-width: 75%;
+  padding: 10px;
+  border-radius: 6px;
   position: relative;
-  word-wrap: break-word;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.message-item.self .message-content {
-  background-color: #95ec69;
+.self .message-content {
+  background-color: #95ec69; /* 微信绿 */
   color: #000;
-  border-top-right-radius: 2px;
 }
 
-.message-item.other .message-content {
+.other .message-content {
   background-color: #fff;
   border: 1px solid #ddd;
   color: #333;
-  border-top-left-radius: 2px;
 }
 
 .sender {
-  font-size: 12px;
+  font-size: 11px;
   color: #888;
-  display: block;
-  margin-bottom: 2px;
   display: flex;
   align-items: center;
   gap: 4px;
+  margin-bottom: 4px;
 }
 
 .owner-badge {
-  background-color: #f56c6c;
-  color: white;
+  background: #f56c6c;
+  color: #fff;
   font-size: 10px;
-  padding: 1px 4px;
+  padding: 0 4px;
   border-radius: 2px;
-  transform: scale(0.9);
-  display: inline-block;
 }
 
 .text {
   margin: 0;
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.5;
 }
-
 .time {
   font-size: 10px;
-  color: #aaa;
+  color: #999;
   display: block;
   text-align: right;
   margin-top: 4px;
 }
 
 .input-area {
-  display: flex;
-  padding: 15px;
+  padding: 20px;
   background-color: #fff;
-  border-top: 1px solid #eee;
+  border-top: 1px solid #ddd;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 60px;
 }
 
 .input-area input {
@@ -704,103 +588,77 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  margin-right: 10px;
   outline: none;
-  transition: border-color 0.2s;
-}
-
-.input-area input:focus {
-  border-color: #409eff;
 }
 
 .input-area button {
   padding: 0 20px;
-  background-color: #409eff;
+  background-color: #07c160;
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-weight: bold;
 }
 
-.input-area button:hover {
-  background-color: #66b1ff;
-}
-
-.empty-state {
-  justify-content: center;
-  align-items: center;
-  color: #999;
-}
-
+/* 弹窗样式 */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 2000;
 }
-
 .modal {
-  background: white;
+  background: #fff;
   padding: 20px;
   border-radius: 8px;
   width: 300px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
-
-.modal h3 {
-  margin-top: 0;
-  margin-bottom: 15px;
-  font-size: 16px;
-}
-
 .modal input {
   width: 100%;
-  padding: 8px;
-  margin-bottom: 15px;
+  padding: 10px;
+  margin: 15px 0;
   border: 1px solid #ddd;
-  border-radius: 4px;
   box-sizing: border-box;
 }
-
 .modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
 }
 
-.modal-actions button {
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  border: 1px solid #ddd;
-  background: #fff;
+/* 移动端覆盖 */
+@media (max-width: 768px) {
+  .socket-room-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 100vw;
+    z-index: 1000;
+  }
+  .sidebar {
+    width: 100%;
+    border-right: none;
+  }
+  .chat-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+  }
 }
 
-.modal-actions .btn-confirm {
-  background-color: #409eff;
-  color: white;
-  border: none;
-}
-
-.modal-actions .btn-confirm:hover {
-  background-color: #66b1ff;
-}
-
-.slide-down-enter-active,
-.slide-down-leave-active {
-  transition: all 0.3s ease;
-}
-
-.slide-down-enter-from,
-.slide-down-leave-to {
-  transform: translateY(-100%);
-  opacity: 0;
+.empty-state {
+  justify-content: center;
+  align-items: center;
+  color: #999;
 }
 </style>

@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-import FloatingBall from './components/FloatingBall.vue'
+import FloatingBall from "@/components/FloatingBall.vue";
 // 移除原有的登录页面逻辑，统一交由 vue-router 管理
 </script>
 
@@ -14,7 +14,9 @@ import FloatingBall from './components/FloatingBall.vue'
 body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
   background-color: #f5f7fa;
   box-sizing: border-box;
 }

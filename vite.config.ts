@@ -9,10 +9,11 @@ import { defineConfig } from "vite";
 export default defineConfig({
   server: {
     // host: true, // 开启局域网访问
-    port: 8080, // 🔥 这里配置你想要的本地端口（随便改：3000/8888/9000都可以）
+    port: 5173, // 🔥 这里配置你想要的本地端口（随便改：3000/8888/9000都可以）
     open: true, // 自动打开浏览器（可选）
     // 由于vite默认只允许localhost访问，所以需要配置allowedHosts
     allowedHosts: true,
+    hmr: { clientPort: 443 },
   },
   plugins: [
     vue(),

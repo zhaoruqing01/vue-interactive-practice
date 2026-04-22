@@ -16,6 +16,7 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("../views/HomeWeb/index.vue"),
     meta: {
       title: "官网首页",
+      requiresAuth: true,
     },
   },
   {
@@ -29,6 +30,7 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import("../views/Home.vue"),
         meta: {
           title: "首页",
+          requiresAuth: true,
         },
       },
       {
@@ -37,6 +39,7 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import("../views/About.vue"),
         meta: {
           title: "关于",
+          requiresAuth: true,
         },
       },
       {
@@ -45,6 +48,7 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import("../views/Map/index.vue"),
         meta: {
           title: "地图",
+          requiresAuth: true,
         },
       },
       {
@@ -53,6 +57,7 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import("../views/Drag/index.vue"),
         meta: {
           title: "拖拽",
+          requiresAuth: true,
         },
       },
       {
@@ -61,6 +66,7 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import("../views/Scroll/index.vue"),
         meta: {
           title: "滚动",
+          requiresAuth: true,
         },
       },
       {
@@ -69,6 +75,7 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import("../views/Video/index.vue"),
         meta: {
           title: "视频交互",
+          requiresAuth: true,
         },
       },
       {
@@ -76,6 +83,7 @@ const routes: Array<RouteRecordRaw> = [
         name: "NodeJS",
         meta: {
           title: "nodejs",
+          requiresAuth: true,
         },
         children: [
           {
@@ -84,6 +92,7 @@ const routes: Array<RouteRecordRaw> = [
             component: () => import("../views/NodeJs/Article/index.vue"),
             meta: {
               title: "node文章列表",
+              requiresAuth: true,
             },
           },
           {
@@ -92,6 +101,7 @@ const routes: Array<RouteRecordRaw> = [
             component: () => import("../views/NodeJs/BFF/index.vue"),
             meta: {
               title: "BFF",
+              requiresAuth: true,
             },
           },
           {
@@ -100,6 +110,7 @@ const routes: Array<RouteRecordRaw> = [
             component: () => import("../views/NodeJs/Socket/index.vue"),
             meta: {
               title: "Public-Chat",
+              requiresAuth: true,
             },
           },
           {
@@ -108,6 +119,7 @@ const routes: Array<RouteRecordRaw> = [
             component: () => import("../views/NodeJs/Socket-Room/index.vue"),
             meta: {
               title: "Groups-Chat",
+              requiresAuth: true,
             },
           },
           {
@@ -116,6 +128,7 @@ const routes: Array<RouteRecordRaw> = [
             component: () => import("../views/NodeJs/Socket-User/index.vue"),
             meta: {
               title: "User-Chat",
+              requiresAuth: true,
             },
           },
         ],
@@ -142,15 +155,25 @@ const router = createRouter({
   routes,
 });
 
+const getToken = () => {
+  try {
+    const userStr = localStorage.getItem("user");
+    if (!userStr) return null;
+    const user = JSON.parse(userStr);
+    return user?.token || null;
+  } catch {
+    return null;
+  }
+};
+
 // 简单的前置路由守卫
 router.beforeEach((to, from, next) => {
   document.title = `${to.meta.title || "管理系统"} - Vue Test`;
-  // 实际项目中这里可以判断 token
-  // if (to.path !== '/login' && !localStorage.getItem('token')) {
-  //   next('/login')
-  // } else {
-  next();
-  // }
+  if (to.meta.requiresAuth && !getToken()) {
+    next("/login");
+  } else {
+    next();
+  }
 });
 
 export default router;

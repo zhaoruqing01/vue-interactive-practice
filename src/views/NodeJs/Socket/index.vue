@@ -10,6 +10,10 @@
       >
         <div class="message-content">
           <span class="sender" v-if="!msg.isSelf">{{ msg.sender }}</span>
+          <!-- 加了 marked.parse阻塞了浏览器主线程，SSE 卡住、不推送、最后一次性爆发 -->
+          <!-- 但是阻塞的是浏览器主线程而不是网络线程,其实数据早就到浏览器了,只是解析了html,导致了阻塞,无法执行onMessage -->
+          <!-- 执行干完所有的同步,微任务,执行完页面渲染,才会执行sse渲染 -->
+          <!-- marked.parse是（CPU 密集同步任务） -->
           <p
             class="text"
             :class="{ streaming: msg.isStreaming }"
@@ -325,7 +329,11 @@ const startRobotStream = (prompt: string) => {
     )}`,
   );
   currentSSE.value = sse;
-
+  // 后端每推送一次流式数据,自动触发该回调函数并执行该回调函数中的所有操作
+  // SSE 收到字 → 宏任务(onmessage) → 执行同步代码：msg.text += 字
+  // → Vue 触发渲染 → 执行 **同步的 marked.parse(全文)**
+  // → 主线程被同步任务占死
+  // 同步的 marked.parse是一个耗时任务,导致主线程被阻塞,SSE的消息都堆积的在门口不能执行宏任务onMessage,导致页面卡死
   sse.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
